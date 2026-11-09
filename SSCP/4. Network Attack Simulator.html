@@ -1,0 +1,171 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Network Attack Simulator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{--bg:#fff;--fg:#1c1c28;--mut:#666;--card:#f3f4f8;--bd:#d8dae5;--ac:#2563eb;--bad:#dc2626;--ok:#16a34a;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#14151c;--fg:#e8e8f0;--mut:#9a9ab0;--card:#1e2029;--bd:#34364a;--ac:#6ea0ff;--bad:#ff6b6b;--ok:#4ade80}}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+header{padding:14px 18px;border-bottom:1px solid var(--bd)}h1{margin:0;font-size:20px}header p{margin:2px 0 0;color:var(--mut);font-size:13px}
+.wrap{display:flex;flex-wrap:wrap;gap:14px;padding:14px}nav{flex:0 0 210px;display:flex;flex-direction:column;gap:4px}
+nav button{text-align:left;padding:7px 10px;border:1px solid var(--bd);background:var(--card);color:var(--fg);border-radius:8px;cursor:pointer;font-size:13px}
+nav button.on{background:var(--ac);color:#fff;border-color:var(--ac)}nav small{display:block;opacity:.7;font-size:11px}
+main{flex:1 1 480px;min-width:0}.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:12px}
+svg{width:100%;height:auto;display:block;background:var(--bg);border-radius:8px}
+.ctl{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.ctl button{padding:6px 12px;border-radius:6px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);cursor:pointer}
+#cap{min-height:44px;font-weight:600;padding:8px;border-left:4px solid var(--ac)}#cap.bad{border-color:var(--bad)}
+ol{margin:0;padding-left:20px}li{cursor:pointer;padding:2px 4px;border-radius:4px}li.on{background:var(--ac);color:#fff}li.bad{color:var(--bad)}li.on.bad{color:#fff}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}h3{margin:0 0 6px;font-size:14px}.pro h3{color:var(--ok)}.con h3{color:var(--bad)}
+ul{margin:0;padding-left:18px}input{width:100%;padding:8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--fg)}
+td{padding:3px 8px;border-bottom:1px solid var(--bd)}table{width:100%;border-collapse:collapse}td:first-child{font-weight:700;white-space:nowrap}
+</style></head><body>
+<header><h1>Network &amp; Service Attack Simulator</h1><p>Kill chain, ports/protocols, OSI-layer attacks and DNS: animated step by step. Educational and defensive.</p></header>
+<div class="wrap"><nav id="nav"></nav><main id="main"></main></div>
+<script>
+const D=[
+{t:"Cyber Kill Chain",g:"Framework",n:["Attacker","Target org","Defender SOC"],
+s:[[0,1,"1 Reconnaissance: gather names, job posts, social media, tech stack (iterative, never stops)",1],[0,0,"2 Weaponization: pair an exploit with a payload (e.g. ransomware dropper)",1],[0,1,"3 Delivery: phishing email, web link, USB",1],[1,1,"4 Exploitation: a vulnerability is triggered on the victim host",1],[0,1,"5 Installation: backdoor/malware persists on the host",1],[1,0,"6 Command & Control: host calls home over a covert channel",1],[0,1,"7 Actions on Objectives: encrypt files, steal data, collect Bitcoin",1],[2,1,"Defender can break ANY link: social media policy, threat intel, patching, EDR, egress monitoring",0],[0,0,"Lessons-learned loop: attacker refines weak phases for the next campaign",1]],
+ff:[["APT","Advanced Persistent Threat"],["C2","Command and Control"],["SOC","Security Operations Center"],["EDR","Endpoint Detection & Response"]],
+d:"Counter-recon: social media policy, scrub tech details from job postings, threat-intel programme, red-team social engineering tests, third-party intel provider.",
+p:"Easy to teach and explain|Shows every employee can block a phase|Well-defended targets deter attackers",c:"Not a full toolset or knowledge base|Linear view misses insider/cloud attacks|Heavy focus on perimeter",
+a:"Commercial: SOC playbooks & SIEM use-case mapping (banks, telecom). Defense: Lockheed Martin origin; military cyber-intel & incident response. Government: CERT reporting. Education: security training."},
+{t:"Port Remapping",g:"Ports",n:["User","Server","ISP firewall"],
+s:[[0,2,"VoIP/SIP normally uses port 5060",0],[2,0,"Government orders ISP to block 5060",1],[0,2,"User remaps SIP traffic onto port 53 (DNS)",1],[2,1,"Firewall sees 'DNS' and lets it pass",1],[1,0,"Server decides if payload is DNS or VoIP: port number alone proves nothing",0]],
+ff:[["SIP","Session Initiation Protocol"],["VoIP","Voice over IP"],["DNS","Domain Name System"],["ISP","Internet Service Provider"],["DPI","Deep Packet Inspection"]],
+d:"Port-based rules are not enough: use deep packet inspection to verify the payload matches the protocol.",
+p:"Legit use: moving email/SNMP/IMAP to non-standard ports cuts exposure to bots|Defenders learn to inspect payloads",c:"Firewall rule sets get complicated|Malicious tunnelling hides in trusted ports|DPI is CPU-costly",
+a:"Commercial: next-gen firewalls (Palo Alto, Fortinet) with app-ID. Defense: cross-domain guards. Telecom: SIP trunk security."},
+{t:"CIFS / SMB",g:"File sharing",n:["Client","Server","Sniffer"],
+s:[[0,1,"Client connects (SMB over NetBIOS or direct TCP/IP)",0],[1,0,"Server sends challenge; client replies with response (challenge/response)",0],[0,1,"Legacy mode: credentials sent in cleartext",1],[2,2,"Attacker sniffs the cleartext or cracks the response cryptographically",1],[1,0,"Share-level / user-level access granted",0]],
+ff:[["CIFS","Common Internet File System"],["SMB","Server Message Block"],["NetBIOS","Network Basic Input/Output System"],["Samba","Free UNIX/Linux SMB implementation"]],
+d:"Disable legacy cleartext auth, use modern SMB with signing/encryption.",
+p:"Ubiquitous on Windows|User and share level security|Samba gives Linux interoperability",c:"Cleartext fallback for backward compatibility|Credential theft via sniffing/crypto attacks",
+a:"Commercial: office file servers, NAS. Education/Govt: shared drives. Defense: legacy Windows enclaves (hardened)."},
+{t:"SMTP / ESMTP",g:"Email",n:["Sender","Mail server","Recipient"],
+s:[[0,1,"Client submits mail on port 25/TCP; MX record found via DNS",0],[0,1,"SMTP has no authentication or encryption: sender identity is just an address",1],[1,1,"Open relay misconfig lets anyone send spam via the server; server gets blacklisted",1],[0,1,"ESMTP: client/server negotiate extensions incl. AUTH",0],[1,2,"Store-and-forward: server retries delivery for a configurable time",0]],
+ff:[["SMTP","Simple Mail Transfer Protocol"],["ESMTP","Enhanced SMTP"],["MX","Mail Exchange record"],["MTA","Mail Transfer Agent"]],
+d:"Never run an open relay; restrict senders; enable ESMTP authentication.",
+p:"Robust to outages (queue and retry)|ESMTP is modular|Universal",c:"Original SMTP: no auth, no encryption|Spoofable sender|Open relay abuse",
+a:"Every commercial mail platform (Exchange, Gmail, Postfix). Defense/Govt: secured gateways with filtering."},
+{t:"FTP, SFTP, TFTP",g:"File transfer",n:["Client","FTP server","Sniffer"],
+s:[[0,1,"Control channel opens on port 21 (client initiated)",0],[0,1,"Username/password sent in cleartext",1],[2,2,"Attacker sniffs credentials and files",1],[1,0,"Active mode: server opens data channel from port 20 to client (blocked by firewalls)",0],[0,1,"Passive mode: client opens the data channel (firewall friendly)",0],[0,1,"Fix: FTPS (AUTH TLS) or SFTP over SSH, encrypting commands and data",0]],
+ff:[["FTP","File Transfer Protocol"],["FTPS","FTP over TLS (RFC 4217)"],["SFTP","SSH File Transfer Protocol"],["TFTP","Trivial FTP (UDP 69, no auth)"],["TLS","Transport Layer Security"],["PASV","Passive mode"]],
+d:"Use SFTP/FTPS. Note FTP-over-SSH tunnels only protect the control channel; data channels bypass it. TFTP only in trusted low-latency LANs. Avoid anonymous FTP.",
+p:"Mature, simple|PXE/diskless boot via TFTP|SFTP encrypts commands and data",c:"Cleartext original|Two channels complicate firewalls|TFTP has no auth|Anonymous FTP leaks emails and adds risk",
+a:"Commercial: B2B file exchange (SFTP). Network ops: TFTP firmware/config pushes and PXE boot. Defense: managed file transfer."},
+{t:"SSH",g:"Remote access",n:["Admin","Server","Attacker"],
+s:[[0,1,"Client negotiates SSH-2 and authenticates",0],[0,1,"Remote login, command execution, file transfer",0],[0,1,"Port forwarding tunnels X11/VNC through the encrypted channel",0],[2,1,"MITM/hijack fails: integrity checks protect the session",1],[2,1,"SSH-1 is weak: CRC-32 allows insertion attacks, so use SSH-2 only",1]],
+ff:[["SSH","Secure Shell"],["VNC","Virtual Network Computing"],["X11","X Window System"],["MITM","Man-in-the-Middle"],["CRC-32","Cyclic Redundancy Check, 32 bit"]],
+d:"Disable SSH-1, use keys and host-key verification.",
+p:"Encrypts everything|Tunnels insecure protocols|Cross-platform",c:"SSH-1 flaws|Key management burden|Tunnels can hide attacker traffic",
+a:"Commercial: cloud/DevOps admin. Defense: secure router/switch admin. Telecom: base-station and network element management."},
+{t:"SNMP",g:"Network management",n:["Manager","Agent (router)","Attacker"],
+s:[[0,1,"Manager GETs variables (routes, performance) from agent",0],[0,1,"Manager SETs configuration",0],[2,1,"Attacker brute-forces default/guessable community strings",1],[2,1,"v1/v2 send community strings in cleartext, so sniffing works",1],[2,1,"Real case: SUNBURST used poorly secured SNMP in power/HVAC/fire systems",1],[1,0,"SNMPv3 adds authentication and encryption",0]],
+ff:[["SNMP","Simple Network Management Protocol"],["MIB","Management Information Base"],["HVAC","Heating, Ventilation & Air Conditioning"],["NOC","Network Operations Center"]],
+d:"Use SNMPv3, change defaults, restrict manager IPs.",
+p:"Scalable, robust|Central visibility of thousands of devices",c:"v1/v2 cleartext|Default strings|v3 is old and sometimes poorly deployed",
+a:"Commercial: NOC monitoring (Zabbix, SolarWinds). Telecom: carrier equipment polling. Industrial: UPS, HVAC, fire panels."},
+{t:"Data Link Attacks",g:"Layer 2",n:["Host A","Switch","Attacker"],
+s:[[0,1,"Normal: switch learns MAC to port mapping; ARP maps IP to MAC",0],[2,1,"MAC flooding: thousands of fake MACs fill the CAM table",1],[1,0,"Table full: switch fails open and acts like a hub, copying frames to all ports",1],[2,0,"ARP poisoning: fake ARP replies make victim send data to attacker (MITM/DoS)",1],[2,1,"VLAN tagging attack: fake DTP packet turns port into trunk (VLAN leaking)",1],[2,1,"STP attack: attacker claims to be root bridge with lowest priority",1],[1,1,"Defences: port security, 802.1X, dynamic VLANs, DTP off, BPDU guard",0]],
+ff:[["ARP","Address Resolution Protocol"],["MAC","Media Access Control"],["NDP","Neighbor Discovery Protocol (IPv6)"],["VLAN","Virtual LAN"],["DTP","Dynamic Trunking Protocol"],["STP","Spanning Tree Protocol"],["BPDU","Bridge Protocol Data Unit"],["802.1X","Port-based network access control"],["CAM","Content Addressable Memory"]],
+d:"Port security (limit MACs/port), 802.1X, DTP off on untrusted ports, disable direct L2 communication, check IPv6 NDP protections.",
+p:"Port security stops MAC flooding simply|Mostly config-based fixes",c:"ARP/NDP have no authentication|Wireless jamming possible|NDP defences uncertain",
+a:"Commercial: campus/data-centre switches (Dynamic ARP Inspection). Defense: NAC on classified LANs. Telecom: metro Ethernet."},
+{t:"IP Attacks",g:"Layer 3",n:["Victim","Network","Attacker"],
+s:[[2,0,"IP spoofing: packet sent with forged source address",1],[2,0,"Teardrop: overlapping fragments give negative length, so the stack crashes",1],[2,0,"Ping of death / Smurf / LAND denial of service via ICMP and IP tricks",1],[2,1,"Sinkhole: fake routing updates attract traffic",1],[1,1,"Black hole: router drops everything; gray hole drops some selectively",1],[2,1,"Wormhole: two colluding attackers tunnel packets between distant points",1],[2,1,"Sybil: many fake identities inflate or destroy reputation",1],[1,0,"IDS must reassemble fragments; patch; stronger identity validation",0]],
+ff:[["IP","Internet Protocol"],["ICMP","Internet Control Message Protocol"],["LAND","Local Area Network Denial"],["IDS","Intrusion Detection System"],["DDoS","Distributed Denial of Service"],["Sybil","Pseudospoofing / sock-puppet identity attack"]],
+d:"Ingress filtering, patched stacks, IPv6, IDS fragment reassembly, identity validation (CAPTCHA, graph analysis).",
+p:"Most fixes are patches|IPv6 intended to reduce IPv4 weaknesses",c:"Wireless ad hoc attacks have no clear prevention|Hard to diagnose; inferred from degradation",
+a:"Commercial: ISP anti-spoofing (BCP38), IDS/IPS. Defense: MANET/tactical radio network security. IoT: sensor mesh routing."},
+{t:"Transport Layer Attacks",g:"Layer 4",n:["Victim","Network","Attacker"],
+s:[[2,0,"Port scan: probe ports to find services and fingerprint OS",1],[2,0,"Stealth: SYN half-scan, FIN, NULL (no flags), Xmas (all flags) scans",1],[2,0,"SYN flood: many SYNs from spoofed addresses",1],[0,2,"Victim sends SYN-ACK into the void, half-open table fills, legit users refused",1],[2,0,"Sequence-number prediction injects fake packets (session hijack)",1],[2,1,"Smurf (ICMP) / Fraggle (UDP port 7): spoofed broadcast makes all hosts flood the victim",1],[1,0,"Defences: SYN cookies, backlog tuning, firewall stealth mode, random ISN (RFC 1948)",0]],
+ff:[["TCP","Transmission Control Protocol"],["UDP","User Datagram Protocol"],["SYN","Synchronize"],["ACK","Acknowledgement"],["RST","Reset"],["FIN","Finish"],["ISN","Initial Sequence Number"]],
+d:"Firewalls, SYN cookies, tuned backlog, block internal-source packets from outside, application-layer encryption, DR/contingency plans.",
+p:"SYN cookies cost no state|Firewalls detect SYN scans",c:"Botnet SYN floods defeat host tuning|Fixes depend on OS vendor",
+a:"Commercial: CDN/DDoS scrubbing (Cloudflare, Akamai). Defense: border firewalls. Telecom: carrier edge protection."},
+{t:"Session Layer Attacks",g:"Layer 5",n:["Client","Server","Attacker"],
+s:[[0,1,"Legit session established; token/cookie issued",0],[2,0,"Session fixation: attacker preplants a session ID via link",1],[2,1,"Session sidejacking: sniff session cookie (e.g. open Wi-Fi)",1],[2,1,"Replay: reuse captured authentication tokens",1],[2,0,"XSS: malicious script runs as if from the server",1],[2,0,"Downgrade: force weak old SSL/algorithms",1],[1,0,"Defences: HTTPS everywhere, fresh session IDs on login, HttpOnly/secure cookies, short expiry",0]],
+ff:[["XSS","Cross-Site Scripting"],["SSL","Secure Sockets Layer"],["MITM","Man-in-the-Middle"]],
+d:"Regenerate IDs at login, TLS only, secure cookies, patch devices, physical security.",
+p:"Well understood fixes|Browsers enforce secure cookies",c:"Malware/physical access bypasses|Legacy clients enable downgrade",
+a:"Commercial: banking and e-commerce session management. Government: e-services portals. Defense: secured web portals."},
+{t:"Presentation Layer (SSL)",g:"Layer 6",n:["Client","Web server","Attacker"],
+s:[[2,1,"Malformed SSL requests hit the server",1],[2,1,"Encrypted tunnel hides exfiltration; APTs unnoticed for months",1],[1,2,"Deep inspection is costly, so many orgs skip it",1],[0,1,"Fix: SSL offloading to a dedicated delivery platform",0],[1,0,"Platform adds load balancing, WAF, and inspection of in/out traffic",0]],
+ff:[["SSL","Secure Sockets Layer"],["WAF","Web Application Firewall"],["APT","Advanced Persistent Threat"],["ADC","Application Delivery Controller"]],
+d:"SSL offloading/inspection with ADC and WAF; monitor outbound encrypted traffic.",
+p:"Frees web servers|Central inspection point",c:"Decrypting raises privacy and key-handling risk|Costly",
+a:"Commercial: F5, NGINX, cloud load balancers. Defense: TLS inspection proxies. Telecom: CDN edge."},
+{t:"NFS Attacks",g:"Application",n:["NFS client","NFS server","Attacker"],
+s:[[1,0,"Server exports file trees by client IP and directory",0],[2,1,"Bad export exposes sensitive files (e.g. password file)",1],[2,1,"Spoof IP/DNS to impersonate an authorized client",1],[2,1,"UID mapping abuse: root on a client forges matching user IDs",1],[2,0,"Sniff unencrypted RPC and steal file handle",1],[2,0,"Setuid files give privilege escalation",1],[1,0,"Fix: review exports, sync IDs (NIS), secure NFS, nosuid",0]],
+ff:[["NFS","Network File System"],["RPC","Remote Procedure Call"],["NIS","Network Information Service"],["SUID","Set User ID bit"]],
+d:"Audit exports, resolve hosts via /etc/hosts, sync UIDs, use secure NFS/IPsec, mount nosuid.",
+p:"Transparent network file access|Mature on UNIX",c:"IP-based trust|No per-RPC authentication|No encryption by default",
+a:"Commercial: HPC clusters, render farms. Education: university home directories. Defense: research labs (hardened NFSv4 with Kerberos)."},
+{t:"DNS Spoofing / Poisoning",g:"Application",n:["Client","DNS resolver","Attacker"],
+s:[[0,1,"Client asks resolver for a domain",0],[2,1,"Attacker queries the resolver for his own domain",1],[1,2,"Resolver queries; attacker's reply carries extra unrequested records",1],[2,1,"Or races the real answer with IP-spoofed reply",1],[1,1,"Poisoned cache stores fake record; propagates to other servers",1],[1,0,"Client is redirected to the spoofed site",1],[0,1,"Defences: ignore unsolicited answers, DNSSEC, dedicated and monitored/internal DNS",0]],
+ff:[["DNS","Domain Name System"],["DNSSEC","DNS Security Extensions"],["TTL","Time To Live (cache latency)"]],
+d:"Modern resolvers ignore unmatched responses; DNSSEC; split internal/external DNS; monitor servers; register domains early.",
+p:"DNSSEC proves authenticity|Internal DNS is hard to reach",c:"DNSSEC adoption is low|Caching delays recovery",
+a:"Commercial: ISP and enterprise resolvers (DNSSEC validating). Government: .gov DNSSEC mandates. Defense: isolated internal DNS."},
+{t:"DNS Pharming, Namespace, Malformed Data",g:"Application",n:["User","DNS/hosts","Attacker"],
+s:[[2,1,"Pharming: malware edits hosts file; bank name maps to rogue IP",1],[2,1,"Or compromises the DNS server to redirect all its users",1],[2,0,"Social engineering: lookalike or Unicode (IDN) links, mismatched link text",1],[2,1,"Cybersquatting/typosquatting: register near-miss domains (COVID scams)",1],[2,0,"Falsified data (fake invoice/BEC) is valid in format but false in meaning",1],[1,0,"Defences: split DNS, separation of duties, task procedures, awareness",0]],
+ff:[["BEC","Business Email Compromise"],["IDN","Internationalized Domain Name"],["Whois","Domain registrant database"],["DoS","Denial of Service"]],
+d:"Split DNS, hide naming conventions, register domains early, multilayer checks and separation of control.",
+p:"Layered defence works|Awareness is cheap",c:"BEC has no malware to detect|Needs human process discipline",
+a:"Commercial: brand protection (MarkMonitor), finance approval workflows. Government: anti-phishing units."},
+{t:"Network and Service Attacks (DoS/DDoS)",g:"Services",n:["Users","Service","Attacker/botnet"],
+s:[[2,1,"DoS: overload with excess or crafted traffic",1],[2,1,"DDoS: botnet of thousands; also rented (~$20/day)",1],[2,1,"Ping of death: oversized ICMP (>65,536 bytes) crashes old OSs",1],[2,1,"SIP flooding/brute force; default passwords on VoIP/PBX",1],[0,1,"Traffic shaping prioritises VoIP/business; risk: starving real-time traffic, net neutrality issue",0],[1,0,"Defences: layered firewalls, filtering, NAC, load balancing, QoS, upstream ISP help",0]],
+ff:[["DoS","Denial of Service"],["DDoS","Distributed DoS"],["QoS","Quality of Service"],["NAC","Network Access Control"],["PBX","Private Branch Exchange"],["PSTN","Public Switched Telephone Network"],["SIP","Session Initiation Protocol"]],
+d:"Layered filtering, redundancy, reserved bandwidth, upstream blocking by carriers, SLAs agreed beforehand.",
+p:"Load balancing and redundancy absorb load|Upstream scrubbing is effective",c:"Attack IPs rotate|Simple IP/port filter fails vs DDoS|Cost of redundancy",
+a:"Commercial: DDoS mitigation (Cloudflare, AWS Shield). Defense/Govt: carrier-grade scrubbing. Telecom: SBCs protect SIP."}
+];function ins(i,steps,ffs){const s=D[i].s;s.splice(s.length-1,0,...steps);if(ffs)D[i].ff.push(...ffs)}
+ins(4,[[0,1,"ASCII mode converts Layer 6 text format for the target platform; binary mode sends bytes untouched",0],[0,1,"Anonymous FTP: login 'anonymous' + email as password; faded because HTTP is easier, emails get harvested, guest access is risky",1]]);
+ins(7,[[2,1,"Multicast brute force: storm of L2 multicast frames tests whether the switch leaks frames to other VLANs",1],[2,1,"Random frame stress: fields vary randomly, only source/destination stay fixed, to crash the switch",1],[2,0,"Source routing: sender dictates the path and abuses a multihomed host that should not forward",1],[2,0,"Wireless (also Layer 2): jamming floods the channel with noise or traffic to block signals",1],[2,0,"IPv6 NDP is stateless with no authentication, so it can be spoofed like ARP",1]],[["NDP","Neighbor Discovery Protocol"],["ISL","Inter-Switch Link"]]);
+ins(8,[[2,0,"Final-fragment and overlapping-fragment tricks overwrite data during reassembly and evade IDS",1],[2,0,"LAND: packet whose source and destination are the victim itself, so the host loops",1],[2,1,"ICMP/traceroute used to map the network and see routes",1],[2,0,"TCP-level MITM: attacker spoofs both endpoints and hijacks the session",1],[2,1,"Botnet IPs masked by spoofing for flooding, spam, malware delivery",1]]);
+ins(10,[[2,1,"MITM: attacker sits between client and server, altering packets in transit",1],[2,0,"Browser hijack: malware steals cookies and installs apps (Android cases)",1],[2,0,"Physical access: copy or clone credentials from an unattended device",1],[2,1,"Sniffing attacks capture unprotected session traffic",1]]);
+ins(11,[[2,1,"DDoS can also be launched through SSL handshakes and encrypted floods at this layer",1]]);
+ins(13,[[0,1,"Recursive query: resolver does all the work and returns the final answer",0],[1,2,"Iterative query: server returns a referral to the next name server",0],[1,1,"Design flaw 1: server may answer a recursive query with unrequested data; flaw 2: DNS does not authenticate answers",1],[2,1,"Cybersquatting: attacker registers the name first, or lets the owner's registration lapse and grabs it",1]],[["Cybersquatting","Registering a name to extort the rightful owner"]]);
+ins(15,[[2,1,"Self-inflicted DDoS: a pricing error draws a flood of real customers; DoS also applies to water/supply chains",1],[2,1,"Ransomware (2021) showed supply-chain DoS",1]]);
+D.push({t:"Secure Channels: IPsec & Bulk Encryption",g:"Application",n:["Site A","Site B","Attacker"],
+s:[[0,1,"Weak protocols (SNMP v1/v2, TFTP, SMB) are chosen or avoided",0],[2,1,"Attacker taps the link and sees only cleartext from weak protocols",1],[0,1,"Option 1: run the protocol through an IPsec tunnel",0],[0,1,"Option 2: bulk-encrypt the whole circuit (microwave, satellite, leased line) regardless of protocol",0],[2,1,"Attacker sees only ciphertext",1],[1,0,"Application layer = Session + Presentation + Application of OSI",0]],
+ff:[["IPsec","Internet Protocol Security"],["OSI","Open Systems Interconnection"],["TCP/IP","Transmission Control Protocol/Internet Protocol"]],
+d:"Prefer secure protocol variants, otherwise tunnel them; use link encryptors on dedicated circuits.",
+p:"Protects every protocol at once|No app changes needed",c:"Key management overhead|Adds latency|Does not fix endpoint flaws",
+a:"Commercial: site-to-site VPNs. Defense: military link encryptors on satellite/microwave. Telecom: backhaul encryption."});
+
+const $=id=>document.getElementById(id),el=(t,h)=>{const e=document.createElement(t);e.innerHTML=h||'';return e};
+const P=[[80,100],[620,100],[350,235]];let cur=0,step=-1,timer=null,gl=false;
+const nav=$('nav');
+function buildNav(){nav.innerHTML='';D.forEach((x,i)=>{const b=el('button',`${x.t}<small>${x.g}</small>`);b.onclick=()=>{gl=false;cur=i;show()};if(!gl&&i==cur)b.className='on';nav.append(b)});
+const g=el('button','Glossary (all full forms)');g.onclick=()=>{gl=true;stop();glossary();buildNav()};if(gl)g.className='on';nav.append(g)}
+const list=a=>'<ul>'+a.split('|').map(s=>`<li style="cursor:auto">${s}</li>`).join('')+'</ul>';
+function show(){stop();step=-1;buildNav();const x=D[cur],m=$('main');
+m.innerHTML=`<div class="card"><h2 style="margin:0 0 6px;font-size:18px">${x.t}</h2><svg id="sv" viewBox="0 0 700 300"></svg><div id="cap">Press Play or Next to start</div>
+<div class="ctl"><button id="pv">Prev</button><button id="pl">Play</button><button id="nx">Next</button><button id="rs">Reset</button></div></div>
+<div class="card"><h3>Working principle, step by step (click a step)</h3><ol id="ol"></ol></div>
+<div class="g"><div class="card"><h3>Defence / countermeasures</h3>${x.d}</div>
+<div class="card pro"><h3>Pros</h3>${list(x.p)}</div><div class="card con"><h3>Cons / limits</h3>${list(x.c)}</div></div>
+<div class="g"><div class="card"><h3>Where it is deployed (commercial, defense, other)</h3>${x.a}</div>
+<div class="card"><h3>Full forms</h3><table>${x.ff.map(f=>`<tr><td>${f[0]}</td><td>${f[1]}</td></tr>`).join('')}</table></div></div>`;
+$('ol').innerHTML='';x.s.forEach((s,i)=>{const l=el('li',s[2]);if(s[3])l.className='bad';l.onclick=()=>{stop();go(i)};$('ol').append(l)});
+$('pv').onclick=()=>{stop();go(Math.max(0,step-1))};$('nx').onclick=()=>{stop();go(Math.min(x.s.length-1,step+1))};
+$('rs').onclick=()=>{stop();step=-1;draw();$('cap').textContent='Reset'};$('pl').onclick=play;draw()}
+function draw(a){const x=D[cur],s=x.s[step];const pos=x.n.map((_,i)=>P[i]);
+let h=`<defs><marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0L8,4L0,8z" fill="currentColor"/></marker></defs>`;
+pos.forEach((p,i)=>pos.forEach((q,j)=>{if(j>i)h+=`<line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="var(--bd)" stroke-width="2" stroke-dasharray="5 4"/>`}));
+pos.forEach((p,i)=>{const act=s&&(s[0]==i||s[1]==i),atk=/ttack|Sniff/.test(x.n[i]);const col=atk?'var(--bad)':'var(--ac)';
+h+=`<circle cx="${p[0]}" cy="${p[1]}" r="${act?36:30}" fill="${col}" opacity="${act?1:.55}"/><text x="${p[0]}" y="${p[1]+52}" text-anchor="middle" fill="var(--fg)" font-size="13" font-weight="600">${x.n[i]}</text><text x="${p[0]}" y="${p[1]+5}" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">${i==2&&atk?'☠':'●'}</text>`});
+if(s){const f=pos[s[0]],t=pos[s[1]],c=s[3]?'var(--bad)':'var(--ok)';
+if(s[0]==s[1])h+=`<circle cx="${f[0]}" cy="${f[1]}" r="${44+(a||0)*20}" fill="none" stroke="${c}" stroke-width="3" opacity="${1-(a||0)}"/>`;
+else{const k=a==null?1:a,px=f[0]+(t[0]-f[0])*k,py=f[1]+(t[1]-f[1])*k;h+=`<line x1="${f[0]}" y1="${f[1]}" x2="${t[0]}" y2="${t[1]}" stroke="${c}" stroke-width="3"/><rect x="${px-11}" y="${py-8}" width="22" height="16" rx="3" fill="${c}"/>`}}
+$('sv').innerHTML=h}
+function go(i){step=i;const s=D[cur].s[i];$('cap').textContent=s[2];$('cap').className=s[3]?'bad':'';
+[...$('ol').children].forEach((l,j)=>l.classList.toggle('on',j==i));const t0=performance.now();
+(function f(n){const a=Math.min(1,(n-t0)/900);draw(a);if(a<1&&step==i)requestAnimationFrame(f)})(t0)}
+function play(){if(timer){stop();return}$('pl').textContent='Pause';const n=D[cur].s.length;if(step>=n-1)step=-1;
+const tick=()=>{if(step>=n-1){stop();return}go(step+1)};tick();timer=setInterval(tick,2600)}
+function stop(){clearInterval(timer);timer=null;const b=$('pl');if(b)b.textContent='Play'}
+function glossary(){const m=new Map();D.forEach(x=>x.ff.forEach(f=>m.set(f[0],f[1])));const rows=[...m].sort((a,b)=>a[0].localeCompare(b[0]));
+$('main').innerHTML=`<div class="card"><h2 style="margin:0 0 8px;font-size:18px">Glossary of terminologies (${rows.length})</h2><input id="q" placeholder="Search..."><table id="tb"></table></div>`;
+const r=q=>$('tb').innerHTML=rows.filter(a=>(a[0]+a[1]).toLowerCase().includes(q.toLowerCase())).map(a=>`<tr><td>${a[0]}</td><td>${a[1]}</td></tr>`).join('');r('');$('q').oninput=e=>r(e.target.value)}
+show();
+</script></body></html>
